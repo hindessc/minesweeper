@@ -2,6 +2,8 @@ import subprocess
 import pygame
 import threading
 import select
+import sys
+import time
 
 class HandlerThread( threading.Thread ):
     """ A thread that handles a conversation with a single remote server.
@@ -55,7 +57,9 @@ class HandlerThread( threading.Thread ):
                                     new_event = pygame.event.Event( LOSE, { "board" : line[5:] } )
                                     self.stop()
                                 case _:
-                                    new_event = pygame.event.Event( CONTINUE, { "board" : line } )
+                                    if line:
+                                        print("L", line)
+                                        new_event = pygame.event.Event( CONTINUE, { "board" : line } )
                             pygame.event.post( new_event )
                         self.data_buffer = ''  # all used-up
 
@@ -65,42 +69,44 @@ LOSE     = pygame.USEREVENT + 3
 CONTINUE = pygame.USEREVENT + 4
 
 def draw(grid):
-    print(grid)
     grid = str(grid).split("n")
-    for i in range(len(grid)):
-        line = grid[i]
-        for j in range(len(line)):
+    for j in range(len(grid)):
+        line = grid[j]
+        for i in range(len(line)):
+            char = line[i]
             pygame.draw.rect(screen, "grey", pygame.Rect(80*i+10, 80*j+10, 60, 60))
-#            pygame.draw.rect(screen, "red", pygame.Rect(80*i+20, 80*j+20, 40, 40))
-    
-    for i in range(len(grid)):
-        line = grid[i]
-        for j in range(len(line)):
-            char = line[j]
-            match char:
-                case "F":
-                    print("flag")
-                    pygame.draw.rect(screen, "red", pygame.Rect(80*i+20, 80*j+20, 40, 40))
-                    pygame.draw.polygon(screen, "red", ((80*i+10, 80*j+10), (80*i+40, 80*j+10), (80*i+25, 80*j+60)))
+            if char == "F":
+                pygame.draw.rect(screen, "black", pygame.Rect(80*i+15, 80*j+15, 10, 50))
+                pygame.draw.polygon(screen, "red", ((80*i+15, 80*j+15), (80*i+15, 80*j+40), (80*i+60, 80*j+25)))
+            elif char in ["0","1","2","3","4","5","6","7","8","9"]:
+                text = font.render(char, True, "black")
+                text_rect = text.get_rect()
+                text_rect.center = (80*i+40,80*j+40)
+                screen.blit(text, text_rect)
 
 def win(board):
     draw(board)
+    won_lost[0] = True
     print("You win")
-    print("You lose")
-    #new_event = pygame.event.Event( WIN, { "board" : board } )
-    #pygame.event.post( new_event )
 
 def lose(board):
     draw(board)
+    won_lost[1] = True
     print("You lose")
-    #new_event = pygame.event.Event( LOSE, { "board" : board } )
-    #pygame.event.post( new_event )
 
 def play(file, board):
     screen.fill("black")
     draw(board)
-    #write(file, "s " + str(random.randint(0,7)) + " " + str(random.randint(0,7)))
-    pygame.event.post( pygame.event.Event( CONTINUE, { "board" : board } ))
+    if won_lost[1]:
+        text = endFont.render("You Lose", True, "purple")
+        text_rect = text.get_rect()
+        text_rect.center = (320, 320)
+        screen.blit(text, text_rect)
+    if won_lost[0]:
+        text = endFont.render("You Win", True, "green")
+        text_rect = text.get_rect()
+        text_rect.center = (320, 320)
+        screen.blit(text, text_rect)
 
 def write(file, string):
     try:
@@ -111,24 +117,20 @@ def write(file, string):
 
 size = "8"
 
+won_lost = [False, False]
+
 with subprocess.Popen(["./mineSweeper", size],
                       stdin=subprocess.PIPE,
                       stdout=subprocess.PIPE) as proc:
-    l = proc.stdout.readline()
-    print(l)
+    board = proc.stdout.readline()
+    print(board)
 
     pygame.init()
+    font = pygame.font.Font(None, 72)
+    endFont = pygame.font.Font(None, 180)
     screen = pygame.display.set_mode((640, 640))
     clock = pygame.time.Clock()
     running = True
-
-    write(proc, "f 1 2")
-
-    print("1")
-
-    play(proc, l)
-    
-    print("2")
 
     thread1 = HandlerThread(proc.stdout)
     thread1.start()
@@ -145,11 +147,23 @@ with subprocess.Popen(["./mineSweeper", size],
                 win(event.__dict__["board"])
             elif event.type == LOSE:
                 lose(event.__dict__["board"])
+            elif event.type == pygame.MOUSEBUTTONDOWN and not won_lost[0] and not won_lost[1]:
+                if pygame.mouse.get_pressed()[0]:
+                    print("Left")
+                    x, y = pygame.mouse.get_pos()
+                    print (x // 80, y // 80)
+                    write(proc, "s " + str(x // 80) + " " + str(y // 80))
+                elif pygame.mouse.get_pressed()[2]:
+                    print("Right")
+                    x, y = pygame.mouse.get_pos()
+                    write(proc, "f " + str(x // 80) + " " + str(y // 80))
             elif event.type == CONTINUE:
-                play(proc, event.__dict__["board"])
-
+                board = event.__dict__["board"]
+                print("C: ", board)
+        play(proc, board)
         pygame.display.flip()
-        clock.tick(10)  # limits FPS to 60
+
+        clock.tick(60)  # limits FPS to 60
 
     pygame.quit()
     proc.stdin.close()
