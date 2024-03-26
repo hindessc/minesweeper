@@ -8,23 +8,7 @@ import Data.List
 import Control.Monad
 
 type Grid = [[Char]]
-{--
-main :: IO ()
-main = do
-  hSetBuffering stdout NoBuffering
-  putStrLn "1"
-  _ <- hWaitForInput stdin (-1)
-  line <- getLine
-  putStrLn "2"
-  loop
 
-loop :: IO ()
-loop = do
-  _ <- hWaitForInput stdin (-1)
-  line <- getLine
-  putStrLn line
-  loop
---}
 main :: IO ()
 main = do
   hSetBuffering stdout NoBuffering
